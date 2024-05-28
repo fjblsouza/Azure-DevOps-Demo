@@ -1,0 +1,39 @@
+trigger:
+- none
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+- stage: Build
+  jobs:
+  - job: Build
+    steps:
+    - script: npm install
+    - script: npm run build  # Assuming a build script in your package.json
+    - task: Docker@0  # Installs Docker extension
+      inputs:
+        imageName: 'aks-ci-cd-demo'
+        registryLogin: 'demoacrx1:login'  # Replace with your ACR name
+        buildContext: '$(System.DefaultWorkingDirectory)'
+        tags: '$(demoacrx1).azurecr.io/aks-ci-cd-demo:latest'  # Replace with your connection name
+
+- stage: Deploy
+  dependsOn: Build
+  jobs:
+  - deployment: Deploy
+    environment: 'demo'  # Change to your environment name
+    strategy:
+      rolling:
+        primaryReplicaSet: 'aks-ci-cd-demo'  # Match your deployment name
+    steps:
+    - task: Kubernetes@2  # Installs Kubernetes extension
+      inputs:
+        connectionType: 'ACR'  # Assuming ACR is used
+        connection: 'Azure Resource Manager'  # Select your service connection
+        namespace: 'default'
+        deploymentType: 'existingDeployment'
+        deploymentName: 'aks-ci-cd-demo'
+        imageName: '$(demoacrx1).azurecr.io/aks-ci-cd-demo:latest'
+        imageTag: 'latest'
+
